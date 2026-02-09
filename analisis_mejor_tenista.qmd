@@ -1,0 +1,239 @@
+---
+title: "¿Quién es el mejor tenista de 2024?"
+subtitle: |
+  Tarea 1 <br><br>
+  <b>Grupo BeDataSportLab</b> <br>
+  Asignatura: Últimas Tendencias en el Análisis de Datos Deportivo <br>
+  Universidad Rey Juan Carlos (MUSA)
+author:
+  - "Alba Martínez de la Hermosa"
+  - "Alonso González Romero"
+  - "Daniel López Paredes"
+date: last-modified
+date-format: "D [de] MMMM, YYYY"
+format: 
+  html:
+    theme: cosmo
+    css: style.css
+    title-block-banner: true
+    toc: true
+    toc-depth: 3
+    toc-title: "Contenido"
+    number-sections: true
+    embed-resources: true
+    code-fold: true
+    code-summary: "Ver código"
+    fig-cap-location: bottom
+    tbl-cap-location: top
+lang: es
+keywords: ["Tenis", "Redes Complejas", "Eigenvector Centrality", "Sports Analytics"]
+abstract: |
+  El presente informe tiene como objetivo evaluar quién fue el mejor tenista de 2024. Para ello utilizaremos una metodología basada en la centralidad del autovector, una métrica de importancia basada en las redes complejas.
+execute: 
+  warning: false
+  echo: true
+---
+
+# Importacion librerias y datos
+
+Comenzamos importando algunas de las librerias necesarias y los datos sobre los que trabajaremos.
+
+
+```{python}
+import pandas as pd
+import numpy as np
+import matplotlib as plt
+import seaborn as sns 
+import networkx as nx
+from pyvis.network import Network
+
+partidos = pd.read_excel("data/partidos_clean.xlsx")
+ranking= pd.read_excel("data/ranking_clean.xlsx")
+
+
+```
+
+# Fundamentos teóricos. 
+
+A continuación, vamos a crear una red compleja basada en los resultados de los partidos de la ATP de 2024. Vamos a definir un grafo dirigido G(N, A), donde: 
+
+- N: Nodos, cada nodo representará un jugador. 
+- A: Aristas. Si el jugador I gana al jugador J, entonces existirá una arista que sale del nodo J al nodo I. 
+
+A continuación, iteraremos sobre los resultados con el objetivo de crear dicho grafo. Para ello usamos la librería NetworkX:
+
+```{python}
+# Creamos un grafo dirigido vacío:
+
+G = nx.DiGraph()
+
+# Recorremos cada partido: 
+
+for index, row in partidos.iterrows():
+  ganador = row['Winner']
+  perdedor = row['Loser']
+  if G.has_edge(perdedor, ganador):
+    G[perdedor][ganador]['weight'] += 1
+  else:
+    G.add_edge(perdedor, ganador, weight=1)
+
+```
+
+Una vez está el grafo montado, podemos calcular algunos datos como el número total de jugadores o el número de enfrentamientos (sin duplicados):  
+
+```{python}
+print(f"Número de jugadores (nodos): {G.number_of_nodes()}")
+print(f"Número de pares enfrentados (aristas): {G.number_of_edges()}")
+```
+
+
+
+```{python}
+try:
+    centrality = nx.eigenvector_centrality(G.reverse(), weight='weight', max_iter=1000)
+except:
+    centrality = nx.degree_centrality(G) # Fallback si no converger
+
+# Asignamos el score como atributo al grafo original para poder pintarlo luego
+nx.set_node_attributes(G, centrality, 'centrality_score')
+
+# --- 4. VISUALIZACIÓN INTERACTIVA (PYVIS) ---
+
+# Creamos la red visual. 
+# 'notebook=True' es vital para que funcione en Jupyter/Quarto si quisieras incrustarlo
+net = Network(notebook=True, cdn_resources='in_line', height="600px", width="100%", bgcolor="#222222", font_color="white")
+
+# Pasamos nuestro grafo de NetworkX a PyVis
+net.from_nx(G)
+
+# --- PERSONALIZACIÓN CHULA ---
+# Recorremos los nodos de la red visual para darles estilo según su importancia
+for node in net.nodes:
+    # Recuperamos el nombre del tenista (el id del nodo)
+    player_name = node['id']
+    
+    # Recuperamos su score calculado antes
+    score = centrality.get(player_name, 0)
+    
+    # 1. TAMAÑO: Hacemos que los buenos sean visiblemente más grandes
+    # Multiplicamos por un valor alto (ej: 30) para que se note la diferencia
+    node['size'] = 10 + (score * 40) 
+    
+    # 2. COLOR: Los Top Players en Dorado, el resto en Azul
+    if score > 0.3: # Umbral inventado, ajústalo según tus datos
+        node['color'] = '#FFD700' # Oro
+        node['label'] = f"🏆 {player_name}" # Icono de copa
+    else:
+        node['color'] = '#97C2FC' # Azul estándar
+
+    # 3. HOVER: Qué sale al pasar el ratón
+    node['title'] = f"Score: {score:.4f}"
+
+# Opciones de física para que no sea una "bola de pelo"
+# Esto añade botones para que tú juegues con la gravedad en el HTML
+net.show_buttons(filter_=['physics'])
+
+# --- REEMPLAZO PARA SOLUCIONAR EL ERROR DE CODIFICACIÓN ---
+
+# 1. Generamos el código HTML en una variable en lugar de guardarlo directamente
+html_content = net.generate_html()
+
+# 2. Guardamos el archivo forzando la codificación UTF-8 (para que acepte emojis 🏆)
+with open("red_tenis_interactiva.html", mode='w', encoding='utf-8') as f:
+    f.write(html_content)
+
+# 3. Mostramos el resultado en el Notebook (lo que net.show hace automáticamente)
+from IPython.display import IFrame
+display(IFrame(src="red_tenis_interactiva.html", width="100%", height="600px"))
+```
+
+
+
+Por último, graficamos el top 20 vs top 20 ATP:
+
+```{python}
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# --- 1. RENOMBRAR VARIABLE EN RANKING ---
+ranking.rename(columns={'Ranking': 'RankingATP'},inplace=True)
+
+
+# --- 2. DICCIONARIO A DATAFRAME ---
+centralidad = pd.DataFrame(list(centrality.items()), columns=['Jugador', 'Score'])
+
+# --- 3. CREAR RANKING CENTRALITY ---
+centralidad = centralidad.sort_values('Score', ascending=False)
+
+# Creamos la columna con la posición (1, 2, 3...)
+centralidad['RankingCentrality'] = range(1, len(centralidad) + 1)
+
+# --- 4. JOIN (MERGE) ---
+# Unimos por el nombre del jugador. Usamos 'inner' para quedarnos solo con los que están en ambos lados.
+# Asegúrate de que en 'ranking' la columna del nombre también se llama 'Jugador'
+df_comparativa = pd.merge(ranking, centralidad, on='Jugador', how='inner')
+
+# --- 5. GRAFICAR (SCATTER PLOT) ---
+
+# Filtramos solo el TOP 100 del ATP para que el gráfico sea legible
+top_100 = df_comparativa[df_comparativa['RankingATP'] <= 100]
+
+plt.figure(figsize=(12, 12))
+sns.set_style("whitegrid")
+
+# Dibujamos los puntos
+sns.scatterplot(
+    data=top_100, 
+    x='RankingATP', 
+    y='RankingCentrality', 
+    alpha=0.7, 
+    s=100,           # Tamaño de los puntos
+    hue='Score',     # Color según su importancia en la red
+    palette='viridis'
+)
+
+# Dibujamos la línea diagonal perfecta (y = x)
+# Si un punto está en la línea, el Ranking ATP coincide con tu modelo.
+plt.plot([0, 100], [0, 100], ls="--", c="red", label="Coincidencia Perfecta (y=x)")
+
+# --- EXTRA: ETIQUETAS PARA JUGADORES INTERESANTES ---
+# Vamos a poner nombre a los puntos que se desvíen mucho (Outliers)
+for i, row in top_100.iterrows():
+    diff = abs(row['RankingATP'] - row['RankingCentrality'])
+    
+    # Si la diferencia es grande (>20 puestos) o es Top 10 ATP, ponemos el nombre
+    if diff > 20 or row['RankingATP'] <= 10:
+        plt.text(
+            row['RankingATP'] + 1, 
+            row['RankingCentrality'], 
+            row['Jugador'], 
+            fontsize=9,
+            alpha=0.8
+        )
+
+plt.title("Comparativa: Ranking ATP Oficial vs. Centralidad de Autovector (2024)", fontsize=16)
+plt.xlabel("Ranking ATP Oficial", fontsize=12)
+plt.ylabel("Ranking calculado por Redes (Centralidad)", fontsize=12)
+plt.legend()
+plt.gca().invert_yaxis() # Invertimos eje Y para que el #1 esté arriba
+plt.gca().invert_xaxis() # Invertimos eje X para que el #1 esté a la derecha (o quita esto si prefieres 0 a la izq)
+
+plt.show()
+
+# Vemos los datos de los 10 primeros según tu modelo
+print(df_comparativa[['Jugador', 'RankingATP', 'RankingCentrality', 'Score']].head(10))
+
+
+```
+
+
+Se observa que jugadores de mitad de tabla son los mejores según la centralidad del vector. 
+
+
+# Mejor tenista en tierra/hard, etc...
+
+Ahora vamos a hacer lo mismo pero en distintos tipos de pista para evaluar el rey de la tierra batida, el rey de la hierba y el rey de pista dura. 
+
+
+

@@ -1,72 +1,89 @@
-p, li {
+/* --- Tipografía y Estilo General --- */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   text-align: justify;
   text-justify: inter-word;
 }
 
-/* Justificar el resumen/abstract del encabezado */
-.quarto-abstract,
-.abstract,
-#abstract {
+/* Títulos con un poco más de aire */
+h1, h2, h3 {
+  margin-top: 1.5em;
+  color: #2c3e50; /* Un gris azulado oscuro profesional */
+}
+
+/* --- Abstract Profesional --- */
+.quarto-title-block .abstract {
+  background-color: #f8f9fa;
+  padding: 1.5em;
+  border-left: 5px solid #007bff; /* Línea azul elegante a la izquierda */
+  border-radius: 4px;
+  font-style: italic;
+  margin-top: 2em;
   text-align: justify;
-  text-justify: inter-word;
 }
 
-/* Mantener los títulos alineados a la izquierda */
-.quarto-title-block,
-.quarto-title-block .title,
-.quarto-title-block .author,
-.quarto-title-block .date {
-  text-align: left !important;
-}
+/* --- LOGOS EN EL ENCABEZADO --- */
 
+/* Ajustes del bloque del título para dar espacio a los logos */
 .quarto-title-block {
-  position: relative;
-  padding-top: 120px; /* deja espacio para los logos */
+  padding-top: 20px; 
 }
 
-/* Logo izquierdo */
-.quarto-title-block::before {
-  content: "";
-  background: url("URJC_logo.svg.png") no-repeat left center;
-  background-size: 120px auto;
-  position: absolute;
-  top: 5px;
-  left: 20px;
-  width: 120px;
-  height: 120px;
+/* Versión Escritorio (Pantallas grandes) */
+@media (min-width: 900px) {
+  .quarto-title-block {
+      padding-top: 100px; /* Espacio superior para logos */
+  }
+
+  /* Logo URJC (Izquierda) */
+  .quarto-title-block::before {
+    content: "";
+    background: url("URJC_logo.svg.png") no-repeat center center;
+    background-size: contain; /* 'contain' asegura que el logo no se corte */
+    position: absolute;
+    top: 20px;
+    left: 40px;
+    width: 140px;
+    height: 100px;
+    z-index: 10;
+  }
+
+  /* Logo MUSA (Derecha) */
+  .quarto-title-block::after {
+    content: "";
+    background: url("MUSA.png") no-repeat center center;
+    background-size: contain;
+    position: absolute;
+    top: 20px;
+    right: 40px;
+    width: 120px;
+    height: 100px;
+    z-index: 10;
+  }
 }
 
-/* Logo derecho */
-.quarto-title-block::after {
-  content: "";
-  background: url("MUSA.png") no-repeat right center;
-  background-size: 100px auto;
-  position: absolute;
-  top: 15px;
-  right: 20px;
-  width: 100px;
-  height: 100px;
+/* Versión Móvil: Ocultamos logos o los hacemos pequeños para no tapar texto */
+@media (max-width: 899px) {
+  .quarto-title-block::before,
+  .quarto-title-block::after {
+    display: none; /* Mejor ocultarlos en móvil para limpieza visual */
+  }
 }
 
-.quarto-title-block .title {
+/* --- Alineaciones --- */
+
+/* Forzar alineación central del título y autores */
+.quarto-title-block .title,
+.quarto-title-block .subtitle {
   text-align: center !important;
-  width: 100%;
-  margin-bottom: 10px !important;
 }
 
-/* Dejar autor y fecha alineados a la izquierda */
-.quarto-title-block .author,
-.quarto-title-block .date {
-  text-align: left !important;
+.quarto-title-block .quarto-title-meta {
+  justify-content: center !important; /* Centra los autores */
+  text-align: center;
 }
 
-/* --- Tabla de contenidos sin justificación --- */
-#TOC, .toc, nav#TOC, .sidebar nav[role="doc-toc"] {
+/* Tabla de contenidos alineada a la izquierda siempre */
+#TOC, .toc {
   text-align: left !important;
-  text-justify: none !important;
-}
-
-#TOC * , .toc * , nav#TOC * , .sidebar nav[role="doc-toc"] * {
-  text-align: left !important;
-  text-justify: none !important;
 }
