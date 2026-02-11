@@ -34,18 +34,30 @@ execute:
   echo: true
 ---
 
-# Importacion librerias y datos
+# Introducción
 
-Comenzamos importando algunas de las librerias necesarias y los datos sobre los que trabajaremos.
+En el presente documento, se va a calcular quién fue el mejor tenista de 2024. Para ello, tenemos un csv (`2024.xlsx`) que contiene todos los partidos de tenis que se jugaron durante 2024. 
+
+Para calcular el ránking de tenistas de 2024, vamos a ignorar el sistema de puntuación actual (ránking ATP). En su lugar, vamos a usar un sistema de puntuación basado en redes complejas. Para ello, vamos a suponer que los tenistas son nodos de una red compleja, y las aristas (dirigidas) determinarán cuántas veces (si existe) ha ganado un jugador A a un jugador B, dibujándose una arista que sale del jugador B (perdedor) al jugador A (ganador). 
+
+Una vez construida esta red compleja, usaremos la **centralidad del autovector**, que mide la importancia de un nodo en una red (jugador) considerando no sólo cuantas conexiones tiene  (partidos ganados), sino también la relevancia de los nodos con los que se conecta. Un nodo es más central si está conectado a otros nodos influyentes. 
+
+Esto nos indica que, si un jugador A ha ganado a tres jugadores (B, C, D) pero estos jugadores no han ganado a ningún jugador, la centralidad del autovector indicará que las victorias del jugador A son irrelevantes y por lo tanto, el jugador A tendrá poca importancia en la red final. 
+
+# Importancion de librerias y datos
+
+Comenzamos el estudio importando algunas de las principales librerías que serán útiles, entre ellas, destacamos **NetworkX**, una librería de Python muy usada para definir grafos, ya que cuenta con diversas funciones tanto para crear grafos de 0, y calcular cosas como el Camino Mínimo, Caminos Hamiltonianos o la Centralidad del Autovector. 
+
+Debemos destacar que la carga de los datos viene precedida de una pequeña limpieza previa. Los datos originales, `2024.xlsx` y `Ranking_ATP_2024.xlsx` presentaban una inconsistencia en la variable `Jugador`, es decir, el mismo jugador tenía distinto nombre respecto a ambas bases de datos. Es por ello que a través del script `limpiezaNombres.py`, se ha realizado una pequeña limpieza del ránking top 100 ATP para disolver dicha inconsistencia antes de comenzar el estudio a través de algoritmos Fuzzy.
 
 
 ```{python}
 import pandas as pd
 import numpy as np
-import matplotlib as plt
 import seaborn as sns 
 import networkx as nx
 from pyvis.network import Network
+import matplotlib.pyplot as plt
 
 partidos = pd.read_excel("data/partidos_clean.xlsx")
 ranking= pd.read_excel("data/ranking_clean.xlsx")
@@ -53,49 +65,171 @@ ranking= pd.read_excel("data/ranking_clean.xlsx")
 
 ```
 
-# Fundamentos teóricos. 
+# Creación de la red compleja
 
-A continuación, vamos a crear una red compleja basada en los resultados de los partidos de la ATP de 2024. Vamos a definir un grafo dirigido G(N, A), donde: 
+A continuación, vamos a crear una red compleja basada en los resultados de los partidos de la ATP de 2024. Para ello, vamos a definir un grafo dirigido G(N, A), donde: 
 
-- N: Nodos, cada nodo representará un jugador. 
+- N: Nodos, cada nodo representará un jugador de tenis.
 - A: Aristas. Si el jugador I gana al jugador J, entonces existirá una arista que sale del nodo J al nodo I. 
 
-A continuación, iteraremos sobre los resultados con el objetivo de crear dicho grafo. Para ello usamos la librería NetworkX:
+*Nota*: Si un jugador I gana a un jugador J en varias ocasiones, no se añadirá una arista por cada vez que esto suceda, si no que el peso de la arista se incrementará en una unidad por partido ganado, inicializándose en 1.
+
+Para crear esta red que hemos definido de manera teórica, vamos a definir un Di-Grafo vacío e iremos añadiendo aristas (o incrementando) según el ganador/perdedor de cada partido jugado en 2024. 
+
 
 ```{python}
-# Creamos un grafo dirigido vacío:
+# Realizamos el algoritmo dentro de una función con el objetivo de ser capaces de reusar código más adelante:
 
-G = nx.DiGraph()
+def crear_red_jugadores(datos):
+  """
+  Esta función define una red compleja a partir de partidos de tenis en los que hay un Ganador y un Perdedor
+  """
 
-# Recorremos cada partido: 
+  # Creamos el Di Grafo vacío
+  G = nx.DiGraph()
 
-for index, row in partidos.iterrows():
-  ganador = row['Winner']
-  perdedor = row['Loser']
-  if G.has_edge(perdedor, ganador):
-    G[perdedor][ganador]['weight'] += 1
-  else:
-    G.add_edge(perdedor, ganador, weight=1)
+  # Recorremos cada partido:
+
+  for index, row in datos.iterrows():
+    ganador = row['Winner']
+    perdedor = row['Loser']
+    if G.has_edge(perdedor, ganador):
+      # Si ya ha ganado a ese jugador antes, incrementamos el peso de la arista
+      G[perdedor][ganador]['weight'] += 1
+    else:
+      # Si nunca ha ganado a ese jugador antes, creamos una nueva arista dirigida
+      G.add_edge(perdedor, ganador, weight = 1)
+
+  
+  return G
+
+# Usamos la funcion recién definida:
+
+G = crear_red_jugadores(partidos)
 
 ```
 
-Una vez está el grafo montado, podemos calcular algunos datos como el número total de jugadores o el número de enfrentamientos (sin duplicados):  
+
+Una vez hemos creado el grafo, podemos obtener un pequeño resumen: 
 
 ```{python}
 print(f"Número de jugadores (nodos): {G.number_of_nodes()}")
-print(f"Número de pares enfrentados (aristas): {G.number_of_edges()}")
+# REVISAR SI ES EL NUMERO DE PARTIDOS DISTINTOS JUGADOS LA CARDINALIDAD DE LAS ARISTAS
+print(f"Número de partidos distintos jugados (aristas): {G.number_of_edges()}")
 ```
 
 
 
-```{python}
-try:
-    centrality = nx.eigenvector_centrality(G.reverse(), weight='weight', max_iter=1000)
-except:
-    centrality = nx.degree_centrality(G) # Fallback si no converger
+# Cálculo de la centralidad del autovector
 
+Hemos definido nuestra red compleja, G, de manera que si calculamos la centralidad del autovector, nos dará una "puntuación" de la importancia de cada nodo (es decir, cada jugador) respecto a los demás. Como además hemos definido esas relaciones (aristas) entre jugadores como las victorias que tiene un jugador sobre otro, en este caso, la centralidad del autovector nos dará una puntuación de quiénes son los mejores jugadores (importancia). 
+
+Para calcular la centralidad del autovector, tenemos dos opciones: 
+
+1. Utilizar la función `eigenvector_centrality()` de la librería `NetworkX`
+2. Programar una función manual que haga el mismo trabajo. 
+
+En este caso, vamos a realizar ambas, tanto para conocer más a fondo el método como para validar que esté bien hecho. 
+
+Es por ello que comenzamos con la opción 2, programar la función manual. 
+
+```{python}
+def calcular_eigenvector_centrality(G, max_iter = 1000): 
+  """
+  Esta funcion calcula la centralidad del autovector asociado a una red compleja. 
+  """
+  # Inicializamos la importancia de todos los jugadores a 1/Longitud(Grafo). Lo hacemos así para que los números no converjan a un valor demasiado alto.  
+  importancia = dict.fromkeys(G.nodes, 0)
+  importanciaIteracion = dict.fromkeys(G.nodes, 1/ len(G))
+
+  # Comenzamos a iterar: 
+  for i in range (max_iter):
+    # Iteramos sobre cada tenista
+    for tenista in importanciaIteracion:
+      # Iteramos sobre los tenistas que apuntan a este: 
+      for rival in G.predecessors(tenista):
+        # Miro el número de veces que el rival ha sido ganado por el tenista
+        pesoArista = G[rival][tenista]['weight']
+        # Asigno la nueva importancia 
+        importancia[tenista] += pesoArista * importanciaIteracion[rival]
+    
+
+    # Normalizo los nuevos resultados tras la iteración: 
+    suma_total = sum(importancia.values())
+    for nodo in importancia:
+      importancia[nodo] = importancia[nodo]/ suma_total
+
+    
+    # Una vez he asignado la importancia nueva respecto a la de la iteración anterior, miro si debería parar: 
+      # Sumamos cuánto ha cambiado cada nodo individualmente respecto a la vez anterior
+    error = sum(abs(importancia[n] - importanciaIteracion[n]) for n in G.nodes)
+
+    if error< 1e-05: 
+      # CONDICION DE PARADA
+      print(f"Convergió en la iteración {i}")
+      break
+    else: 
+      # SIGO ITERANDO
+      importanciaIteracion = importancia.copy()
+      importancia = dict.fromkeys(G.nodes, 0)
+      
+
+  # Devuelvo la importancia: 
+  print(f"Convergió en la iteración {i}")
+  return importancia
+
+
+
+
+# Calculamos a mano: 
+centralidad = calcular_eigenvector_centrality(G)
+centralidadNetworkX = nx.eigenvector_centrality(G, weight='weight', max_iter=1000)
+
+```
+
+Una vez se han calculado con ambos métodos, comprobamos si lo estamos haciendo bien: 
+
+```{python}
+# Convertimos los diccionarios a DataFrames
+# Orientamos el índice por los nombres de los jugadores
+df = pd.DataFrame([centralidad, centralidadNetworkX]).T
+df.columns = ['CentralidadManual', 'CentralidadValida']
+df.index.name = 'Jugador'
+
+# Calculamos las posiciones
+# ascending=False porque el valor más alto es el número 1 del ranking
+df['PosicionManual'] = df['CentralidadManual'].rank(ascending=False, method='min').astype(int)
+df['PosicionValida'] = df['CentralidadValida'].rank(ascending=False, method='min').astype(int)
+
+# Ordenamos para ver a los mejores primero
+df = df.sort_values(by='PosicionValida', ascending=True)
+
+# 5. Comprobamos
+# Creamos una columna para ver si hay diferencias en el ranking
+df['Ranking_Coincide'] = df['PosicionManual'] == df['PosicionValida']
+
+# Mostramos los primeros 10 resultados
+print(df.head(10))
+
+# Verificar si todos coinciden
+if df['Ranking_Coincide'].all():
+    print("\n¡ÉXITO! Tu algoritmo produce exactamente el mismo ranking que NetworkX.")
+else:
+    print("\nHay pequeñas diferencias. Revisa los nodos donde 'Ranking_Coincide' es False.")
+
+
+df
+```
+
+Observamos que las diferencias radican en las últimas posiciones debido a cómo Python interpreta números extremadamente bajos. Por lo tanto ambos algoritmos son equivalentes. 
+
+# Visualización de la red
+
+A continuación, vamos a visualizar cómo es la red a través de la librería ``PyVis``
+
+```{python}
 # Asignamos el score como atributo al grafo original para poder pintarlo luego
-nx.set_node_attributes(G, centrality, 'centrality_score')
+nx.set_node_attributes(G, centralidadNetworkX, 'centrality_score')
 
 # --- 4. VISUALIZACIÓN INTERACTIVA (PYVIS) ---
 
@@ -113,7 +247,7 @@ for node in net.nodes:
     player_name = node['id']
     
     # Recuperamos su score calculado antes
-    score = centrality.get(player_name, 0)
+    score = centralidadNetworkX.get(player_name, 0)
     
     # 1. TAMAÑO: Hacemos que los buenos sean visiblemente más grandes
     # Multiplicamos por un valor alto (ej: 30) para que se note la diferencia
@@ -149,19 +283,22 @@ display(IFrame(src="red_tenis_interactiva.html", width="100%", height="600px"))
 
 
 
-Por último, graficamos el top 20 vs top 20 ATP:
+# Ranking por Eigenvector Centrality
+
+(en esta sección mostramos el Top N)
+
+
+# Comparación: ATP vs Eigenvector Centrality
+
+(falta adaptar bien la gráfica)
+Por último, graficamos el top 50 ATP vs top 50 EigenVector
 
 ```{python}
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-
 # --- 1. RENOMBRAR VARIABLE EN RANKING ---
 ranking.rename(columns={'Ranking': 'RankingATP'},inplace=True)
 
-
 # --- 2. DICCIONARIO A DATAFRAME ---
-centralidad = pd.DataFrame(list(centrality.items()), columns=['Jugador', 'Score'])
+centralidad = pd.DataFrame(list(centralidadNetworkX.items()), columns=['Jugador', 'Score'])
 
 # --- 3. CREAR RANKING CENTRALITY ---
 centralidad = centralidad.sort_values('Score', ascending=False)
@@ -177,7 +314,7 @@ df_comparativa = pd.merge(ranking, centralidad, on='Jugador', how='inner')
 # --- 5. GRAFICAR (SCATTER PLOT) ---
 
 # Filtramos solo el TOP 100 del ATP para que el gráfico sea legible
-top_100 = df_comparativa[df_comparativa['RankingATP'] <= 100]
+top_100 = df_comparativa[df_comparativa['RankingATP'] <= 50]
 
 plt.figure(figsize=(12, 12))
 sns.set_style("whitegrid")
