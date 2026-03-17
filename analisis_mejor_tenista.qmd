@@ -395,9 +395,9 @@ print(tabla_final.head(30))
 
 Se observa que jugadores de mitad de tabla son los mejores según la centralidad del vector. 
 
-# Mejor tenista por superficie (ATP vs Eigenvector Centrality)
+# Mejor tenista por superficie
 
-Ahora vamos a hacer lo mismo pero en distintos tipos de pista para evaluar el rey de la tierra batida, el rey de la hierba y el rey de pista dura. 
+A continuación vamos a visualizar los ránkings generados por la centralidad del autovector en distintos tipos de pista para conocer quiénes son los reyes de la hierba, la tierra batida y la pista dura. 
 
 ## Grass
 
@@ -405,7 +405,7 @@ Ahora vamos a hacer lo mismo pero en distintos tipos de pista para evaluar el re
 # 1. Filtrar los partidos solo para la superficie de hierba
 partidos_hierba = partidos[partidos['Surface'] == 'Grass']
 
-# 2. Crear la red específica de hierba usando la función que ya definiste
+# 2. Crear la red específica de hierba usando la función que ya definida
 G_hierba = crear_red_jugadores(partidos_hierba)
 
 # 3. Calcular la centralidad del autovector para la red de hierba
@@ -417,11 +417,56 @@ df_hierba = pd.DataFrame(list(centralidad_hierba_dict.items()), columns=['Jugado
 df_hierba = df_hierba.sort_values('Score_Hierba', ascending=False)
 df_hierba['RankingCentralidadHierba'] = range(1, len(df_hierba) + 1)
 
-# 5. Comparar con el Ranking ATP Oficial
+# Obtener Top 30
+condicion = df_hierba['RankingCentralidadHierba'] < 31
+df_top_30_hierba = df_hierba[condicion]
+```
+
+El siguiente gráfico presenta el ránking según la centralidad del autovector para la superficie de hierba.
+
+```{python}
+# Plotly dibuja de abajo hacia arriba. Para que el #1 quede arriba, 
+# ordenamos el dataframe al revés antes de graficar:
+top_30_hierba_plot = df_top_30_hierba.sort_values('Score_Hierba', ascending=True)
+
+# Crear gráfico interactivo
+fig = px.bar(
+    top_30_hierba_plot, 
+    x='Score_Hierba', 
+    y='Jugador', 
+    orientation='h',
+    color='RankingCentralidadHierba', # El color indicará su centralidad
+    color_continuous_scale='Viridis_r', # Escala de colores elegante
+    text='Score_Hierba', # Muestra el número exacto en la barra
+    title='Top 30 Jugadores: Score en Hierba y Ranking de Centralidad'
+)
+
+# Ajustes de diseño profesional
+fig.update_traces(
+    texttemplate='%{text:.1f}', # Formato del texto (1 decimal)
+    textposition='outside',     # Texto fuera de la barra
+    marker_line_width=0         # Quitar el borde negro de las barras para un look más limpio
+)
+
+fig.update_layout(
+    height=800, # MUY IMPORTANTE: Darle suficiente altura para 30 filas
+    plot_bgcolor='rgba(0,0,0,0)', # Fondo transparente
+    yaxis_title=None, # Ya sabemos que son jugadores
+    xaxis_title='Puntuación (Score)',
+    margin=dict(l=0, r=20, t=50, b=0) # Ajustar márgenes
+)
+
+fig.show()
+```
+
+En este gráfico se observa la comparación entre el ránking ATP y el generado por la centralidad del autovector teniendo en cuenta solo los partidos que se disputaron en hierba.
+
+```{python}
+# Comparar con el Ranking ATP Oficial
 # Usamos el dataframe 'ranking'
 df_comparativa_hierba = pd.merge(ranking, df_hierba, on='Jugador', how='inner')
 
-# 6. Visualización: Top 30 en Hierba vs su Ranking ATP
+# Visualización: Top 30 en Hierba vs su Ranking ATP
 top_30_hierba = df_comparativa_hierba.sort_values('RankingCentralidadHierba').head(30)
 
 plt.figure(figsize=(12, 8))
@@ -474,10 +519,55 @@ df_dura = pd.DataFrame(list(centralidad_dura_dict.items()), columns=['Jugador', 
 df_dura = df_dura.sort_values('Score_Dura', ascending=False)
 df_dura['RankingCentralidadDura'] = range(1, len(df_dura) + 1)
 
-# 5. Comparar con el Ranking ATP Oficial
+# Obtener Top 30
+condicion = df_dura['RankingCentralidadDura'] < 31
+df_top_30_dura = df_dura[condicion]
+```
+
+El siguiente gráfico presenta el ránking según la centralidad del autovector en pista dura.
+
+```{python}
+# Plotly dibuja de abajo hacia arriba. Para que el #1 quede arriba, 
+# ordenamos el dataframe al revés antes de graficar:
+top_30_dura_plot = df_top_30_dura.sort_values('Score_Dura', ascending=True)
+
+# Crear gráfico interactivo
+fig = px.bar(
+    top_30_dura_plot, 
+    x='Score_Dura', 
+    y='Jugador', 
+    orientation='h',
+    color='RankingCentralidadDura', # El color indicará su centralidad
+    color_continuous_scale='Viridis_r', # Escala de colores elegante
+    text='Score_Dura', # Muestra el número exacto en la barra
+    title='Top 30 Jugadores: Score en Pista Dura y Ranking de Centralidad'
+)
+
+# Ajustes de diseño profesional
+fig.update_traces(
+    texttemplate='%{text:.1f}', # Formato del texto (1 decimal)
+    textposition='outside',     # Texto fuera de la barra
+    marker_line_width=0         # Quitar el borde negro de las barras para un look más limpio
+)
+
+fig.update_layout(
+    height=800, # MUY IMPORTANTE: Darle suficiente altura para 30 filas
+    plot_bgcolor='rgba(0,0,0,0)', # Fondo transparente
+    yaxis_title=None, # Ya sabemos que son jugadores
+    xaxis_title='Puntuación (Score)',
+    margin=dict(l=0, r=20, t=50, b=0) # Ajustar márgenes
+)
+
+fig.show()
+```
+
+En este gráfico se observa la comparación entre el ránking ATP y el generado por la centralidad del autovector considerando únicamente los partidos que se jugaron en pista dura.
+
+```{python}
+# Comparar con el Ranking ATP Oficial
 df_comparativa_dura = pd.merge(ranking, df_dura, on='Jugador', how='inner')
 
-# 6. Visualización: Top 30 en Pista Dura vs su Ranking ATP
+# Visualización: Top 30 en Pista Dura vs su Ranking ATP
 top_30_dura = df_comparativa_dura.sort_values('RankingCentralidadDura').head(30)
 
 plt.figure(figsize=(12, 8))
@@ -530,10 +620,55 @@ df_tierra = pd.DataFrame(list(centralidad_tierra_dict.items()), columns=['Jugado
 df_tierra = df_tierra.sort_values('Score_Tierra', ascending=False)
 df_tierra['RankingCentralidadTierra'] = range(1, len(df_tierra) + 1)
 
-# 5. Comparar con el Ranking ATP Oficial
+# Obtener Top 30
+condicion = df_tierra['RankingCentralidadTierra'] < 31
+df_top_30_tierra = df_tierra[condicion]
+```
+
+El siguiente gráfico presenta el ránking según la centralidad del autovector en las pistas de tierra batida.
+
+```{python}
+# Plotly dibuja de abajo hacia arriba. Para que el #1 quede arriba, 
+# ordenamos el dataframe al revés antes de graficar:
+top_30_tierra_plot = df_top_30_tierra.sort_values('Score_Tierra', ascending=True)
+
+# Crear gráfico interactivo
+fig = px.bar(
+    top_30_tierra_plot, 
+    x='Score_Tierra', 
+    y='Jugador', 
+    orientation='h',
+    color='RankingCentralidadTierra', # El color indicará su centralidad
+    color_continuous_scale='Viridis_r', # Escala de colores elegante
+    text='Score_Tierra', # Muestra el número exacto en la barra
+    title='Top 30 Jugadores: Score en Tierra Batida y Ranking de Centralidad'
+)
+
+# Ajustes de diseño profesional
+fig.update_traces(
+    texttemplate='%{text:.1f}', # Formato del texto (1 decimal)
+    textposition='outside',     # Texto fuera de la barra
+    marker_line_width=0         # Quitar el borde negro de las barras para un look más limpio
+)
+
+fig.update_layout(
+    height=800, # MUY IMPORTANTE: Darle suficiente altura para 30 filas
+    plot_bgcolor='rgba(0,0,0,0)', # Fondo transparente
+    yaxis_title=None, # Ya sabemos que son jugadores
+    xaxis_title='Puntuación (Score)',
+    margin=dict(l=0, r=20, t=50, b=0) # Ajustar márgenes
+)
+
+fig.show()
+```
+
+En este gráfico se observa la comparación entre el ránking ATP y el generado por la centralidad del autovector de los encuentros en tierra batida.
+
+```{python}
+# Comparar con el Ranking ATP Oficial
 df_comparativa_tierra = pd.merge(ranking, df_tierra, on='Jugador', how='inner')
 
-# 6. Visualización: Top 30 en Tierra Batida vs su Ranking ATP
+# Visualización: Top 30 en Tierra Batida vs su Ranking ATP
 top_30_tierra = df_comparativa_tierra.sort_values('RankingCentralidadTierra').head(30)
 
 plt.figure(figsize=(12, 8))
@@ -571,6 +706,6 @@ print(top_30_tierra[['Jugador', 'RankingCentralidadTierra', 'RankingATP', 'Score
 
 # Conclusiones
 
-Se ha observado que en los ránking ATP es diferente al ránking generado según la centralidad del autovector. Esto ocurre porque en el ránking ATP se premia la cantidad de partidos ganados y la regularidad de los deportistas a lo largo de la temporada, independientemente de quiénes hayan sido los rivales de cada partido. La centralidad del autovector, sin embargo, premia también la dificultad que supone cada rival.
+Se ha observado que el ránking ATP es diferente al ránking generado según la centralidad del autovector. Esto ocurre porque en el ránking ATP se premia la cantidad de partidos ganados y la regularidad de los deportistas a lo largo de la temporada, independientemente de quiénes hayan sido los rivales de cada partido. La centralidad del autovector, sin embargo, premia también la dificultad que supone cada rival.
 
 Cuando esto se especifica en los tres tipos de superficie en los que pueden desarrollarse los partidos, se observa la especialidad de cada tenista. Puede que un jugador esté peor posicionado en el ránking ATP (en el que se tienen en cuenta todos los partidos sin prestar atención a la superficie) pero ser de los mejores en un tipo de pista. Un ejemplo es Martínez P, que siendo el nº43 del ránking ATP es el 6º mejor en Tierra Batida. De la misma forma, Sinner, nº1 del ránking ATP, desciende hasta la posición 27 cuando solo se observan los partidos en este tipo de pista.
