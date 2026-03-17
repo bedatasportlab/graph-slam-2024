@@ -48,7 +48,6 @@ En esta sección importamos las principales librerías necesarias para llevar a 
 
 Es importante señalar el proceso de preprocesamiento realizado. Se identificaron inconsistencias en los nombres de los jugadores entre los archivos `2024.xlsx` y `Ranking_ATP_2024.xlsx`. Mediante el script auxiliar `limpiezaNombres.py`, se aplicaron técnicas de coincidencia difusa (fuzzy matching) para estandarizar los nombres del Top 100 ATP, asegurando la integridad de los datos antes de la construcción y comparación de ránkings. 
 
-
 ```{python}
 import pandas as pd
 import numpy as np
@@ -83,7 +82,6 @@ La construcción del grafo se realiza de manera iterativa recorriendo el histór
 
 Este enfoque permite que la red capture no solo "a quién" se ganó, sino la frecuencia de dicha dominancia. 
 
-
 ```{python}
 # Realizamos el algoritmo dentro de una función con el objetivo de ser capaces de reusar código más adelante:
 
@@ -116,7 +114,6 @@ G = crear_red_jugadores(partidos)
 
 ```
 
-
 Una vez hemos creado el grafo, podemos obtener un pequeño resumen: 
 
 ```{python}
@@ -124,8 +121,6 @@ print(f"Número de jugadores (nodos): {G.number_of_nodes()}")
 # REVISAR SI ES EL NUMERO DE PARTIDOS DISTINTOS JUGADOS LA CARDINALIDAD DE LAS ARISTAS
 print(f"Número de partidos distintos jugados (aristas): {G.number_of_edges()}")
 ```
-
-
 
 # Cálculo de la centralidad del autovector
 
@@ -330,8 +325,6 @@ fig.update_layout(
 fig.show()
 ```
 
-
-
 # Comparación: ATP vs Eigenvector Centrality
 
 Por último, graficamos el top 30 ATP vs top 30 EigenVector
@@ -400,13 +393,184 @@ print(tabla_final.head(30))
 
 ```
 
-
 Se observa que jugadores de mitad de tabla son los mejores según la centralidad del vector. 
 
-
-# Mejor tenista en tierra/hard, etc...
+# Mejor tenista por superficie (ATP vs Eigenvector Centrality)
 
 Ahora vamos a hacer lo mismo pero en distintos tipos de pista para evaluar el rey de la tierra batida, el rey de la hierba y el rey de pista dura. 
 
+## Grass
 
+```{python}
+# 1. Filtrar los partidos solo para la superficie de hierba
+partidos_hierba = partidos[partidos['Surface'] == 'Grass']
 
+# 2. Crear la red específica de hierba usando la función que ya definiste
+G_hierba = crear_red_jugadores(partidos_hierba)
+
+# 3. Calcular la centralidad del autovector para la red de hierba
+# Usamos NetworkX por eficiencia y para evitar problemas de convergencia en redes pequeñas
+centralidad_hierba_dict = nx.eigenvector_centrality(G_hierba, weight='weight', max_iter=1000)
+
+# 4. Convertir a DataFrame y crear el Ranking de Centralidad en Hierba
+df_hierba = pd.DataFrame(list(centralidad_hierba_dict.items()), columns=['Jugador', 'Score_Hierba'])
+df_hierba = df_hierba.sort_values('Score_Hierba', ascending=False)
+df_hierba['RankingCentralidadHierba'] = range(1, len(df_hierba) + 1)
+
+# 5. Comparar con el Ranking ATP Oficial
+# Usamos el dataframe 'ranking'
+df_comparativa_hierba = pd.merge(ranking, df_hierba, on='Jugador', how='inner')
+
+# 6. Visualización: Top 30 en Hierba vs su Ranking ATP
+top_30_hierba = df_comparativa_hierba.sort_values('RankingCentralidadHierba').head(30)
+
+plt.figure(figsize=(12, 8))
+sns.set_style("whitegrid")
+
+# Gráfico de dispersión
+sns.scatterplot(
+    data=top_30_hierba, 
+    x='RankingATP', 
+    y='RankingCentralidadHierba', 
+    s=200, 
+    hue='Score_Hierba', 
+    palette='viridis'
+)
+
+# Etiquetas de nombres
+for i, row in top_30_hierba.iterrows():
+    plt.text(row['RankingATP'] + 0.5, row['RankingCentralidadHierba'], row['Jugador'], fontsize=10)
+
+# Configuración de ejes (Invertidos para que el #1 esté arriba a la izquierda)
+plt.title("Especialistas en Hierba 2024: Centralidad vs Ranking ATP", fontsize=15)
+plt.xlabel("Ranking ATP Oficial")
+plt.ylabel("Ranking Centralidad (Solo Hierba)")
+plt.ylim(max(top_30_hierba['RankingCentralidadHierba']) + 1, 0)
+plt.xlim(0, max(top_30_hierba['RankingATP']) + 5)
+plt.axline((0, 0), slope=1, color='red', linestyle='--', alpha=0.5, label='Relación 1:1')
+
+plt.legend()
+plt.show()
+
+# Mostrar tabla de resultados
+print("TOP 30 MEJORES EN HIERBA SEGÚN CENTRALIDAD:")
+print(top_30_hierba[['Jugador', 'RankingCentralidadHierba', 'RankingATP', 'Score_Hierba']])
+```
+
+## Pista dura
+
+```{python}
+# 1. Filtrar los partidos solo para la superficie de pista dura (Hard)
+partidos_dura = partidos[partidos['Surface'] == 'Hard']
+
+# 2. Crear la red específica de pista dura usando la función definida
+G_dura = crear_red_jugadores(partidos_dura)
+
+# 3. Calcular la centralidad del autovector para la red de pista dura
+centralidad_dura_dict = nx.eigenvector_centrality(G_dura, weight='weight', max_iter=1000)
+
+# 4. Convertir a DataFrame y crear el Ranking de Centralidad en Pista Dura
+df_dura = pd.DataFrame(list(centralidad_dura_dict.items()), columns=['Jugador', 'Score_Dura'])
+df_dura = df_dura.sort_values('Score_Dura', ascending=False)
+df_dura['RankingCentralidadDura'] = range(1, len(df_dura) + 1)
+
+# 5. Comparar con el Ranking ATP Oficial
+df_comparativa_dura = pd.merge(ranking, df_dura, on='Jugador', how='inner')
+
+# 6. Visualización: Top 30 en Pista Dura vs su Ranking ATP
+top_30_dura = df_comparativa_dura.sort_values('RankingCentralidadDura').head(30)
+
+plt.figure(figsize=(12, 8))
+sns.set_style("whitegrid")
+
+# Gráfico de dispersión
+sns.scatterplot(
+    data=top_30_dura, 
+    x='RankingATP', 
+    y='RankingCentralidadDura', 
+    s=200, 
+    hue='Score_Dura', 
+    palette='viridis'
+)
+
+# Etiquetas de nombres
+for i, row in top_30_dura.iterrows():
+    plt.text(row['RankingATP'] + 0.5, row['RankingCentralidadDura'], row['Jugador'], fontsize=10)
+
+# Configuración de ejes (Invertidos para que el #1 esté arriba a la izquierda)
+plt.title("Especialistas en Pista Dura 2024: Centralidad vs Ranking ATP", fontsize=15)
+plt.xlabel("Ranking ATP Oficial")
+plt.ylabel("Ranking Centralidad (Solo Pista Dura)")
+plt.ylim(max(top_30_dura['RankingCentralidadDura']) + 1, 0)
+plt.xlim(0, max(top_30_dura['RankingATP']) + 5)
+plt.axline((0, 0), slope=1, color='red', linestyle='--', alpha=0.5, label='Relación 1:1')
+
+plt.legend()
+plt.show()
+
+# Mostrar tabla de resultados
+print("TOP 30 MEJORES EN PISTA DURA SEGÚN CENTRALIDAD:")
+print(top_30_dura[['Jugador', 'RankingCentralidadDura', 'RankingATP', 'Score_Dura']])
+```
+
+## Tierra batida
+
+```{python}
+# 1. Filtrar los partidos solo para la superficie de tierra batida (Clay)
+partidos_tierra = partidos[partidos['Surface'] == 'Clay']
+
+# 2. Crear la red específica de tierra batida usando la función definida
+G_tierra = crear_red_jugadores(partidos_tierra)
+
+# 3. Calcular la centralidad del autovector para la red de tierra batida
+centralidad_tierra_dict = nx.eigenvector_centrality(G_tierra, weight='weight', max_iter=1000)
+
+# 4. Convertir a DataFrame y crear el Ranking de Centralidad en Tierra Batida
+df_tierra = pd.DataFrame(list(centralidad_tierra_dict.items()), columns=['Jugador', 'Score_Tierra'])
+df_tierra = df_tierra.sort_values('Score_Tierra', ascending=False)
+df_tierra['RankingCentralidadTierra'] = range(1, len(df_tierra) + 1)
+
+# 5. Comparar con el Ranking ATP Oficial
+df_comparativa_tierra = pd.merge(ranking, df_tierra, on='Jugador', how='inner')
+
+# 6. Visualización: Top 30 en Tierra Batida vs su Ranking ATP
+top_30_tierra = df_comparativa_tierra.sort_values('RankingCentralidadTierra').head(30)
+
+plt.figure(figsize=(12, 8))
+sns.set_style("whitegrid")
+
+# Gráfico de dispersión
+sns.scatterplot(
+    data=top_30_tierra, 
+    x='RankingATP', 
+    y='RankingCentralidadTierra', 
+    s=200, 
+    hue='Score_Tierra', 
+    palette='viridis'
+)
+
+# Etiquetas de nombres
+for i, row in top_30_tierra.iterrows():
+    plt.text(row['RankingATP'] + 0.5, row['RankingCentralidadTierra'], row['Jugador'], fontsize=10)
+
+# Configuración de ejes (Invertidos para que el #1 esté arriba a la izquierda)
+plt.title("Especialistas en Tierra Batida 2024: Centralidad vs Ranking ATP", fontsize=15)
+plt.xlabel("Ranking ATP Oficial")
+plt.ylabel("Ranking Centralidad (Solo Tierra Batida)")
+plt.ylim(max(top_30_tierra['RankingCentralidadTierra']) + 1, 0)
+plt.xlim(0, max(top_30_tierra['RankingATP']) + 5)
+plt.axline((0, 0), slope=1, color='red', linestyle='--', alpha=0.5, label='Relación 1:1')
+
+plt.legend()
+plt.show()
+
+# Mostrar tabla de resultados
+print("TOP 30 MEJORES EN TIERRA BATIDA SEGÚN CENTRALIDAD:")
+print(top_30_tierra[['Jugador', 'RankingCentralidadTierra', 'RankingATP', 'Score_Tierra']])
+```
+
+# Conclusiones
+
+Se ha observado que en los ránking ATP es diferente al ránking generado según la centralidad del autovector. Esto ocurre porque en el ránking ATP se premia la cantidad de partidos ganados y la regularidad de los deportistas a lo largo de la temporada, independientemente de quiénes hayan sido los rivales de cada partido. La centralidad del autovector, sin embargo, premia también la dificultad que supone cada rival.
+
+Cuando esto se especifica en los tres tipos de superficie en los que pueden desarrollarse los partidos, se observa la especialidad de cada tenista. Puede que un jugador esté peor posicionado en el ránking ATP (en el que se tienen en cuenta todos los partidos sin prestar atención a la superficie) pero ser de los mejores en un tipo de pista. Un ejemplo es Martínez P, que siendo el nº43 del ránking ATP es el 6º mejor en Tierra Batida. De la misma forma, Sinner, nº1 del ránking ATP, desciende hasta la posición 27 cuando solo se observan los partidos en este tipo de pista.
